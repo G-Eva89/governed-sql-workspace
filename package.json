@@ -7,7 +7,17 @@
     "dev": "turbo dev",
     "build": "turbo build",
     "test": "turbo test",
-    "lint": "turbo lint"
+    "lint": "turbo lint",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "db:migrate": "node scripts/ensure-env.mjs && pnpm --filter @governed-sql/db db:migrate",
+    "db:seed": "node scripts/ensure-env.mjs && pnpm --filter @governed-sql/db db:seed",
+    "db:generate": "pnpm --filter @governed-sql/db db:generate",
+    "db:seed-target": "node scripts/run-seed-target.mjs",
+    "db:psql:app": "node scripts/run-psql.mjs app",
+    "db:psql:target": "node scripts/run-psql.mjs target",
+    "dev:up": "node scripts/run-dev-up.mjs",
+    "setup": "node scripts/run-dev-up.mjs && node scripts/ensure-env.mjs && pnpm --filter @governed-sql/db db:migrate && pnpm --filter @governed-sql/db db:seed"
   },
   "devDependencies": {
     "@eslint/js": "^9.28.0",

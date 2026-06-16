@@ -17,9 +17,15 @@
   },
   "dependencies": {
     "@governed-sql/db": "workspace:*",
-    "@governed-sql/schemas": "workspace:*"
+    "@governed-sql/schemas": "workspace:*",
+    "bcryptjs": "^3.0.2",
+    "drizzle-orm": "^0.44.2",
+    "jose": "^6.0.11",
+    "postgres": "^3.4.7"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

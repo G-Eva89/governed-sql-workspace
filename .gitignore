@@ -4,7 +4,12 @@ dist/
 .next/
 coverage/
 *.log
+*.tsbuildinfo
+cookies.txt
 .env
 .env.*
 !.env.example
 .DS_Store
+# Pagila SQL dumps (downloaded by scripts/seed-target-pagila.*)
+third_party/pagila/*.sql
+third_party/pagila/*.backup

@@ -6,13 +6,18 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx watch src/index.ts",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run",
     "lint": "eslint src"
   },
   "dependencies": {
     "@governed-sql/core": "workspace:*",
+    "@governed-sql/db": "workspace:*",
+    "@governed-sql/schemas": "workspace:*",
     "@hono/node-server": "^1.14.4",
-    "hono": "^4.7.11"
+    "@hono/zod-validator": "^0.7.0",
+    "drizzle-orm": "^0.44.2",
+    "hono": "^4.7.11",
+    "zod": "^3.25.67"
   },
   "devDependencies": {
     "@types/node": "catalog:",
