@@ -14,3 +14,7 @@ export function jsonValidator<T extends ZodSchema>(
     }
   });
 }
+
+export function queryValidator<T extends ZodSchema>(schema: T) {
+  return jsonValidator('query', schema);
+}

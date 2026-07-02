@@ -12,7 +12,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run --passWithNoTests --exclude '**/*.integration.test.ts'",
+    "test:integration": "vitest run src/query/query-service.integration.test.ts",
     "lint": "eslint src"
   },
   "dependencies": {
@@ -21,6 +22,7 @@
     "bcryptjs": "^3.0.2",
     "drizzle-orm": "^0.44.2",
     "jose": "^6.0.11",
+    "node-sql-parser": "^5.4.0",
     "postgres": "^3.4.7"
   },
   "devDependencies": {

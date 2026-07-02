@@ -1,5 +1,12 @@
 import { afterAll, describe, expect, it } from 'vitest';
-import { AuthService, ConnectionService } from '@governed-sql/core';
+import {
+  AuditService,
+  AuthService,
+  ConnectionService,
+  MetadataService,
+  PolicyEngine,
+  QueryService,
+} from '@governed-sql/core';
 import { connections, createDb, loadEnvFiles, requireDatabaseUrl } from '@governed-sql/db';
 import { eq } from 'drizzle-orm';
 import type { Hono } from 'hono';
@@ -27,14 +34,33 @@ async function loginAsAdmin(app: Hono<ApiBindings>): Promise<string> {
   return cookie;
 }
 
+async function getPagilaConnectionId(app: Hono<ApiBindings>, cookie: string): Promise<string> {
+  const listResponse = await app.request('/connections', {
+    headers: { Cookie: cookie },
+  });
+  const listBody = (await listResponse.json()) as {
+    connections: Array<{ id: string; name: string }>;
+  };
+  const pagila = listBody.connections.find((item) => item.name === 'Pagila Demo');
+  if (!pagila) {
+    throw new Error('Pagila Demo connection not found');
+  }
+  return pagila.id;
+}
+
 describe('API', () => {
   const { db, sql } = createDb(databaseUrl);
+  const connectionService = new ConnectionService(db);
+  const auditService = new AuditService(db);
+  const queryService = new QueryService(connectionService, new PolicyEngine(), auditService);
   const app = createApp({
     db,
     authService: new AuthService(db),
-    connectionService: new ConnectionService(db),
+    connectionService,
+    metadataService: new MetadataService(connectionService),
+    queryService,
+    auditService,
   });
-
   const createdConnectionNames: string[] = [];
 
   it('GET /health returns ok', async () => {
@@ -223,6 +249,168 @@ describe('API', () => {
       },
       body: JSON.stringify({ status: 'active' }),
     });
+  });
+
+  it('GET /connections/:id/tables returns Pagila tables', async () => {
+    const cookie = await loginAsAdmin(app);
+    const listResponse = await app.request('/connections', {
+      headers: { Cookie: cookie },
+    });
+    const listBody = (await listResponse.json()) as {
+      connections: Array<{ id: string; name: string }>;
+    };
+    const pagila = listBody.connections.find((item) => item.name === 'Pagila Demo');
+    expect(pagila).toBeTruthy();
+
+    const response = await app.request(`/connections/${pagila!.id}/tables`, {
+      headers: { Cookie: cookie },
+    });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      tables: Array<{ schema: string; name: string; type: string }>;
+    };
+    const tableNames = body.tables.map((table) => table.name);
+    expect(tableNames).toContain('film');
+    expect(tableNames).toContain('rental');
+    expect(body.tables.every((table) => table.schema === 'public')).toBe(true);
+  });
+
+  it('GET /connections/:id/tables/:tableName describes Pagila film columns', async () => {
+    const cookie = await loginAsAdmin(app);
+    const listResponse = await app.request('/connections', {
+      headers: { Cookie: cookie },
+    });
+    const listBody = (await listResponse.json()) as {
+      connections: Array<{ id: string; name: string }>;
+    };
+    const pagila = listBody.connections.find((item) => item.name === 'Pagila Demo');
+    expect(pagila).toBeTruthy();
+
+    const response = await app.request(`/connections/${pagila!.id}/tables/film`, {
+      headers: { Cookie: cookie },
+    });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      table: { schema: string; name: string };
+      columns: Array<{ name: string; dataType: string }>;
+    };
+    expect(body.table).toEqual({ schema: 'public', name: 'film' });
+    const columnNames = body.columns.map((column) => column.name);
+    expect(columnNames).toContain('film_id');
+    expect(columnNames).toContain('title');
+  });
+
+  it('GET /connections/:id/tables requires authentication', async () => {
+    const response = await app.request('/connections/00000000-0000-0000-0000-000000000001/tables');
+    expect(response.status).toBe(401);
+  });
+
+  it('POST /connections/:id/query returns Pagila film rows', async () => {
+    const cookie = await loginAsAdmin(app);
+    const connectionId = await getPagilaConnectionId(app, cookie);
+
+    const response = await app.request(`/connections/${connectionId}/query`, {
+      method: 'POST',
+      headers: {
+        Cookie: cookie,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        sql: 'SELECT film_id, title FROM film ORDER BY film_id LIMIT 5',
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      columns: string[];
+      rows: Array<Record<string, unknown>>;
+      rowCount: number;
+      truncated: boolean;
+    };
+    expect(body.columns).toContain('film_id');
+    expect(body.columns).toContain('title');
+    expect(body.rowCount).toBe(5);
+    expect(body.rows).toHaveLength(5);
+    expect(body.rows[0]?.title).toBeTruthy();
+    expect(body.truncated).toBe(false);
+  });
+
+  it('POST /connections/:id/query rejects DELETE and records audit', async () => {
+    const cookie = await loginAsAdmin(app);
+    const connectionId = await getPagilaConnectionId(app, cookie);
+    const rejectedSql = 'DELETE FROM film WHERE film_id = 1';
+
+    const response = await app.request(`/connections/${connectionId}/query`, {
+      method: 'POST',
+      headers: {
+        Cookie: cookie,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ sql: rejectedSql }),
+    });
+
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('POLICY_VIOLATION');
+
+    const auditResponse = await app.request('/audit?limit=5', {
+      headers: { Cookie: cookie },
+    });
+    expect(auditResponse.status).toBe(200);
+    const auditBody = (await auditResponse.json()) as {
+      events: Array<{
+        status: string;
+        sqlPreview: string | null;
+        errorCode: string | null;
+        principalType: string;
+      }>;
+    };
+    const event = auditBody.events.find((item) => item.sqlPreview === rejectedSql);
+    expect(event).toBeTruthy();
+    expect(event?.status).toBe('policy_violation');
+    expect(event?.errorCode).toBe('POLICY_VIOLATION');
+    expect(event?.principalType).toBe('user');
+  });
+
+  it('GET /audit returns paginated query history', async () => {
+    const cookie = await loginAsAdmin(app);
+    const connectionId = await getPagilaConnectionId(app, cookie);
+
+    await app.request(`/connections/${connectionId}/query`, {
+      method: 'POST',
+      headers: {
+        Cookie: cookie,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ sql: 'SELECT COUNT(*) AS total FROM film' }),
+    });
+
+    const response = await app.request('/audit?page=1&limit=10', {
+      headers: { Cookie: cookie },
+    });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      events: Array<{ action: string; source: string; durationMs: number | null }>;
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+    };
+    expect(body.page).toBe(1);
+    expect(body.limit).toBe(10);
+    expect(body.total).toBeGreaterThan(0);
+    expect(body.events.some((event) => event.action === 'run_query' && event.source === 'web')).toBe(
+      true,
+    );
+    expect(body.events[0]?.durationMs).not.toBeNull();
+  });
+
+  it('GET /audit requires authentication', async () => {
+    const response = await app.request('/audit');
+    expect(response.status).toBe(401);
   });
 
   it('returns structured 404 for unknown routes', async () => {

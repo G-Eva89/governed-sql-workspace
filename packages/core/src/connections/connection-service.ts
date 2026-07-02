@@ -27,6 +27,13 @@ export type UpdateConnectionInput = {
   password?: string;
 };
 
+export type ConnectionPolicy = {
+  allowedSchemas: string[];
+  maxRows: number;
+  maxDurationMs: number;
+  blocklistedTables: string[];
+};
+
 const DEFAULT_POLICY = {
   allowedSchemas: ['public'],
   maxRows: 500,
@@ -140,6 +147,35 @@ export class ConnectionService {
     const config = await this.toTargetConfigFromRow(row);
     await pingTargetDatabase(config);
     return { ok: true, message: 'Connection successful' };
+  }
+
+  async resolveTargetConfig(orgId: string, connectionId: string): Promise<TargetConnectionConfig> {
+    const row = await this.getConnectionRow(orgId, connectionId);
+    if (row.status === 'disabled') {
+      throw new AppError('FORBIDDEN', 'Connection is disabled');
+    }
+    return this.toTargetConfigFromRow(row);
+  }
+
+  async getPolicy(orgId: string, connectionId: string): Promise<ConnectionPolicy> {
+    await this.getConnectionRow(orgId, connectionId);
+
+    const [policy] = await this.db
+      .select()
+      .from(connectionPolicies)
+      .where(eq(connectionPolicies.connectionId, connectionId))
+      .limit(1);
+
+    if (!policy) {
+      throw new AppError('INTERNAL_ERROR', 'Connection policy not found');
+    }
+
+    return {
+      allowedSchemas: policy.allowedSchemas,
+      maxRows: policy.maxRows,
+      maxDurationMs: policy.maxDurationMs,
+      blocklistedTables: policy.blocklistedTables,
+    };
   }
 
   private async getConnectionRow(orgId: string, connectionId: string) {

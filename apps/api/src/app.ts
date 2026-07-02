@@ -1,9 +1,16 @@
 import { Hono } from 'hono';
-import type { AuthService, ConnectionService } from '@governed-sql/core';
+import type {
+  AuditService,
+  AuthService,
+  ConnectionService,
+  MetadataService,
+  QueryService,
+} from '@governed-sql/core';
 import type { AppDatabase } from '@governed-sql/db';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
 import { requestIdMiddleware } from './middleware/request-id.js';
 import { requestLoggerMiddleware } from './middleware/request-logger.js';
+import { createAuditRoutes } from './routes/audit.js';
 import { createAuthRoutes } from './routes/auth.js';
 import { createConnectionRoutes } from './routes/connections.js';
 import { createHealthRoutes } from './routes/health.js';
@@ -13,6 +20,9 @@ export type AppDependencies = {
   db: AppDatabase['db'];
   authService: AuthService;
   connectionService: ConnectionService;
+  metadataService: MetadataService;
+  queryService: QueryService;
+  auditService: AuditService;
 };
 
 export function createApp(deps: AppDependencies) {
@@ -25,7 +35,16 @@ export function createApp(deps: AppDependencies) {
 
   app.route('/', createHealthRoutes(deps.db));
   app.route('/auth', createAuthRoutes(deps.authService));
-  app.route('/connections', createConnectionRoutes(deps.authService, deps.connectionService));
+  app.route(
+    '/connections',
+    createConnectionRoutes(
+      deps.authService,
+      deps.connectionService,
+      deps.metadataService,
+      deps.queryService,
+    ),
+  );
+  app.route('/audit', createAuditRoutes(deps.authService, deps.auditService));
 
   return app;
 }
