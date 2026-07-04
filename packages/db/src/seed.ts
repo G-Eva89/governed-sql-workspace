@@ -1,9 +1,11 @@
 import { eq } from 'drizzle-orm';
+import { createHash, randomBytes } from 'node:crypto';
 import { hash } from 'bcryptjs';
 import { createDb } from './client.js';
 import { encryptSecret, getEncryptionKey } from './crypto.js';
 import { loadEnvFiles, requireDatabaseUrl } from './env.js';
 import {
+  apiKeys,
   connectionPolicies,
   connections,
   memberships,
@@ -15,6 +17,16 @@ const DEFAULT_ADMIN_EMAIL = 'admin@example.com';
 const DEFAULT_ADMIN_PASSWORD = 'admin123';
 const DEFAULT_ORG_NAME = 'Demo Organization';
 const PAGILA_CONNECTION_NAME = 'Pagila Demo';
+const MCP_DEMO_KEY_NAME = 'MCP Demo';
+
+function generateSeedApiKey(): { secret: string; prefix: string; hash: string } {
+  const secret = `gsw_${randomBytes(32).toString('base64url')}`;
+  return {
+    secret,
+    prefix: secret.slice(0, 8),
+    hash: createHash('sha256').update(secret).digest('hex'),
+  };
+}
 
 export type SeedResult = {
   adminEmail: string;
@@ -110,11 +122,21 @@ export async function seedAppDatabase(databaseUrl: string): Promise<SeedResult> 
       blocklistedTables: [],
     });
 
+    const demoKey = generateSeedApiKey();
+    await db.insert(apiKeys).values({
+      orgId: org.id,
+      name: MCP_DEMO_KEY_NAME,
+      keyPrefix: demoKey.prefix,
+      keyHash: demoKey.hash,
+      scopes: [connection.id],
+    });
+
     console.log('Seed complete:');
     console.log(`  Organization: ${orgName}`);
     console.log(`  Admin email:  ${adminEmail}`);
     console.log(`  Admin password: ${adminPassword}`);
     console.log(`  Connection:   ${PAGILA_CONNECTION_NAME} -> ${pagilaHost}:${pagilaPort}/${pagilaDatabase}`);
+    console.log(`  MCP API key:  ${demoKey.secret}`);
 
     return {
       adminEmail,

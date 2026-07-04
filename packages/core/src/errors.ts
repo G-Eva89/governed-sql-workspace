@@ -26,3 +26,21 @@ export class AppError extends Error {
 export function isAppError(error: unknown): error is AppError {
   return error instanceof AppError;
 }
+
+export function formatStructuredError(
+  code: ApiErrorCode,
+  message: string,
+  requestId?: string,
+): { error: { code: ApiErrorCode; message: string; requestId?: string } } {
+  return {
+    error: {
+      code,
+      message,
+      ...(requestId ? { requestId } : {}),
+    },
+  };
+}
+
+export function formatAppError(error: AppError, requestId?: string) {
+  return formatStructuredError(error.code, error.message, requestId);
+}

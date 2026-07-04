@@ -2,17 +2,12 @@ import type { ErrorHandler } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { ZodError } from 'zod';
-import { AppError, isAppError } from '@governed-sql/core';
+import type { ApiErrorCode } from '@governed-sql/schemas';
+import { AppError, formatStructuredError, isAppError } from '@governed-sql/core';
 import type { ApiBindings } from '../types.js';
 
-function errorBody(code: string, message: string, requestId: string) {
-  return {
-    error: {
-      code,
-      message,
-      requestId,
-    },
-  };
+function errorBody(code: ApiErrorCode, message: string, requestId: string) {
+  return formatStructuredError(code, message, requestId);
 }
 
 export const errorHandler: ErrorHandler<ApiBindings> = (error, c) => {

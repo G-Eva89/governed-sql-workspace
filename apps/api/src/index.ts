@@ -1,5 +1,6 @@
 import { serve } from '@hono/node-server';
 import {
+  ApiKeyService,
   AuditService,
   AuthService,
   closeAllTargetClients,
@@ -15,6 +16,7 @@ loadEnvFiles();
 
 const { db, sql } = createDb(requireDatabaseUrl());
 const authService = new AuthService(db);
+const apiKeyService = new ApiKeyService(db);
 const connectionService = new ConnectionService(db);
 const metadataService = new MetadataService(connectionService);
 const auditService = new AuditService(db);
@@ -22,6 +24,7 @@ const queryService = new QueryService(connectionService, new PolicyEngine(), aud
 const app = createApp({
   db,
   authService,
+  apiKeyService,
   connectionService,
   metadataService,
   queryService,

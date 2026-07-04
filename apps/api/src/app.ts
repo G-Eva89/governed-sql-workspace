@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import type {
+  ApiKeyService,
   AuditService,
   AuthService,
   ConnectionService,
@@ -10,6 +11,7 @@ import type { AppDatabase } from '@governed-sql/db';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
 import { requestIdMiddleware } from './middleware/request-id.js';
 import { requestLoggerMiddleware } from './middleware/request-logger.js';
+import { createApiKeyRoutes } from './routes/api-keys.js';
 import { createAuditRoutes } from './routes/audit.js';
 import { createAuthRoutes } from './routes/auth.js';
 import { createConnectionRoutes } from './routes/connections.js';
@@ -19,6 +21,7 @@ import type { ApiBindings } from './types.js';
 export type AppDependencies = {
   db: AppDatabase['db'];
   authService: AuthService;
+  apiKeyService: ApiKeyService;
   connectionService: ConnectionService;
   metadataService: MetadataService;
   queryService: QueryService;
@@ -35,10 +38,12 @@ export function createApp(deps: AppDependencies) {
 
   app.route('/', createHealthRoutes(deps.db));
   app.route('/auth', createAuthRoutes(deps.authService));
+  app.route('/api-keys', createApiKeyRoutes(deps.authService, deps.apiKeyService));
   app.route(
     '/connections',
     createConnectionRoutes(
       deps.authService,
+      deps.apiKeyService,
       deps.connectionService,
       deps.metadataService,
       deps.queryService,

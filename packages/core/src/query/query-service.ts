@@ -12,6 +12,7 @@ export type RunQueryInput = {
   principal: QueryPrincipal;
   source: 'web' | 'mcp' | 'api';
   mcpTool?: string;
+  metadata?: Record<string, unknown>;
 };
 
 function serializeValue(value: unknown): unknown {
@@ -113,6 +114,7 @@ export class QueryService {
         durationMs: Date.now() - startedAt,
         errorCode,
         mcpTool: input.mcpTool,
+        metadata: input.metadata,
       });
     }
   }

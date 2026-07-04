@@ -1,5 +1,6 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import {
+  ApiKeyService,
   AuditService,
   AuthService,
   ConnectionService,
@@ -53,9 +54,11 @@ describe('API', () => {
   const connectionService = new ConnectionService(db);
   const auditService = new AuditService(db);
   const queryService = new QueryService(connectionService, new PolicyEngine(), auditService);
+  const apiKeyService = new ApiKeyService(db);
   const app = createApp({
     db,
     authService: new AuthService(db),
+    apiKeyService,
     connectionService,
     metadataService: new MetadataService(connectionService),
     queryService,
@@ -411,6 +414,140 @@ describe('API', () => {
   it('GET /audit requires authentication', async () => {
     const response = await app.request('/audit');
     expect(response.status).toBe(401);
+  });
+
+  it('POST /api-keys creates a key for admin and returns secret once', async () => {
+    const cookie = await loginAsAdmin(app);
+    const connectionId = await getPagilaConnectionId(app, cookie);
+
+    const response = await app.request('/api-keys', {
+      method: 'POST',
+      headers: {
+        Cookie: cookie,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: `Test Key ${Date.now()}`,
+        scopes: [connectionId],
+      }),
+    });
+
+    expect(response.status).toBe(201);
+    const body = (await response.json()) as {
+      id: string;
+      secret: string;
+      keyPrefix: string;
+      scopes: string[];
+    };
+    expect(body.secret.startsWith('gsw_')).toBe(true);
+    expect(body.keyPrefix).toBe(body.secret.slice(0, 8));
+    expect(body.scopes).toEqual([connectionId]);
+  });
+
+  it('POST /connections/:id/query accepts Bearer API key auth', async () => {
+    const cookie = await loginAsAdmin(app);
+    const connectionId = await getPagilaConnectionId(app, cookie);
+
+    const createResponse = await app.request('/api-keys', {
+      method: 'POST',
+      headers: {
+        Cookie: cookie,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: `Bearer Test ${Date.now()}`,
+        scopes: [connectionId],
+      }),
+    });
+    const created = (await createResponse.json()) as { secret: string; id: string };
+
+    const response = await app.request(`/connections/${connectionId}/query`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${created.secret}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        sql: 'SELECT film_id, title FROM film ORDER BY film_id LIMIT 2',
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { rowCount: number };
+    expect(body.rowCount).toBe(2);
+
+    const auditResponse = await app.request('/audit?limit=10', {
+      headers: { Cookie: cookie },
+    });
+    const auditBody = (await auditResponse.json()) as {
+      events: Array<{ principalType: string; source: string; principalId: string }>;
+    };
+    const apiKeyEvent = auditBody.events.find(
+      (event) => event.principalId === created.id && event.source === 'api',
+    );
+    expect(apiKeyEvent).toBeTruthy();
+    expect(apiKeyEvent?.principalType).toBe('api_key');
+
+    await app.request(`/api-keys/${created.id}`, {
+      method: 'DELETE',
+      headers: { Cookie: cookie },
+    });
+  });
+
+  it('rejects API key scoped to a different connection', async () => {
+    const cookie = await loginAsAdmin(app);
+    const connectionId = await getPagilaConnectionId(app, cookie);
+    const otherConnectionName = `Scoped Other ${Date.now()}`;
+    createdConnectionNames.push(otherConnectionName);
+
+    const otherConnectionResponse = await app.request('/connections', {
+      method: 'POST',
+      headers: {
+        Cookie: cookie,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: otherConnectionName,
+        host: 'localhost',
+        port: 5434,
+        database: 'pagila',
+        username: 'pagila_ro',
+        password: 'pagila_ro',
+        sslMode: 'disable',
+      }),
+    });
+    const otherConnection = (await otherConnectionResponse.json()) as { id: string };
+
+    const createResponse = await app.request('/api-keys', {
+      method: 'POST',
+      headers: {
+        Cookie: cookie,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: `Scoped Key ${Date.now()}`,
+        scopes: [connectionId],
+      }),
+    });
+    const created = (await createResponse.json()) as { secret: string; id: string };
+
+    const response = await app.request(`/connections/${otherConnection.id}/query`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${created.secret}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ sql: 'SELECT 1 AS ok' }),
+    });
+
+    expect(response.status).toBe(403);
+    const body = (await response.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('FORBIDDEN');
+
+    await app.request(`/api-keys/${created.id}`, {
+      method: 'DELETE',
+      headers: { Cookie: cookie },
+    });
   });
 
   it('returns structured 404 for unknown routes', async () => {

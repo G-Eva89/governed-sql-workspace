@@ -22,3 +22,13 @@ export const apiErrorBodySchema = z.object({
 });
 
 export type ApiErrorBody = z.infer<typeof apiErrorBodySchema>;
+
+export const structuredErrorSchema = z.object({
+  error: z.object({
+    code: apiErrorCodeSchema,
+    message: z.string(),
+    requestId: z.string().optional(),
+  }),
+});
+
+export type StructuredError = z.infer<typeof structuredErrorSchema>;

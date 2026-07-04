@@ -1,3 +1,10 @@
+export { ApiKeyService, type CreateApiKeyResult, type VerifiedApiKey } from './auth/api-key-service.js';
+export {
+  API_KEY_DISPLAY_PREFIX_LENGTH,
+  API_KEY_PREFIX,
+  generateApiKeySecret,
+  hashApiKey,
+} from './auth/api-key-crypto.js';
 export { AuthService } from './auth/auth-service.js';
 export {
   SESSION_COOKIE_NAME,
@@ -7,7 +14,8 @@ export {
   verifySessionToken,
   type SessionPayload,
 } from './auth/session.js';
-export { AuditService, type QueryPrincipal, type RecordQueryInput } from './audit/audit-service.js';
+export type { ApiKeyPrincipal, Principal, UserPrincipal } from './auth/principal.js';
+export { AuditService, type QueryPrincipal, type RecordActionInput, type RecordQueryInput } from './audit/audit-service.js';
 export { hashSql, previewSql } from './audit/sql-utils.js';
 export {
   ConnectionService,
@@ -22,7 +30,7 @@ export {
   type TargetConnectionConfig,
   type TargetSql,
 } from './connections/target-client.js';
-export { AppError, isAppError } from './errors.js';
+export { AppError, formatAppError, formatStructuredError, isAppError } from './errors.js';
 export {
   MetadataService,
   type ColumnDescriptor,

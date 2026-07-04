@@ -4,11 +4,11 @@ import type { ApiBindings } from '../types.js';
 
 export function requireAdmin(): MiddlewareHandler<ApiBindings> {
   return async (c, next) => {
-    const session = c.get('session');
-    if (!session) {
-      throw new AppError('UNAUTHORIZED', 'Authentication required');
+    const principal = c.get('principal');
+    if (!principal || principal.type !== 'user') {
+      throw new AppError('FORBIDDEN', 'Admin access required');
     }
-    if (session.role !== 'admin') {
+    if (principal.role !== 'admin') {
       throw new AppError('FORBIDDEN', 'Admin access required');
     }
     await next();

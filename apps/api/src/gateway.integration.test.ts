@@ -1,5 +1,6 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import {
+  ApiKeyService,
   AuditService,
   AuthService,
   ConnectionService,
@@ -7,7 +8,8 @@ import {
   PolicyEngine,
   QueryService,
 } from '@governed-sql/core';
-import { createDb, loadEnvFiles, requireDatabaseUrl } from '@governed-sql/db';
+import { createDb, loadEnvFiles, requireDatabaseUrl, connections } from '@governed-sql/db';
+import { eq } from 'drizzle-orm';
 import type { Hono } from 'hono';
 import { createApp } from './app.js';
 import type { ApiBindings } from './types.js';
@@ -55,6 +57,7 @@ describe('Governed SQL gateway integration', () => {
   const app = createApp({
     db,
     authService: new AuthService(db),
+    apiKeyService: new ApiKeyService(db),
     connectionService,
     metadataService: new MetadataService(connectionService),
     queryService,
@@ -135,6 +138,48 @@ describe('Governed SQL gateway integration', () => {
     expect(failureEvent?.status).toBe('policy_violation');
     expect(failureEvent?.errorCode).toBe('POLICY_VIOLATION');
     expect(failureEvent?.durationMs).not.toBeNull();
+  });
+
+  it('Bearer API key query uses the same QueryService path as session auth', async () => {
+    const cookie = await loginAsAdmin(app);
+    const connectionId = await getPagilaConnectionId(app, cookie);
+    const sql = 'SELECT film_id, title FROM film ORDER BY film_id LIMIT 2';
+
+    const [connectionRow] = await db
+      .select({ orgId: connections.orgId })
+      .from(connections)
+      .where(eq(connections.id, connectionId))
+      .limit(1);
+
+    const apiKeyService = new ApiKeyService(db);
+    const created = await apiKeyService.create(connectionRow!.orgId, {
+      name: `Gateway Bearer ${Date.now()}`,
+      scopes: [connectionId],
+    });
+
+    const sessionResponse = await app.request(`/connections/${connectionId}/query`, {
+      method: 'POST',
+      headers: { Cookie: cookie, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sql }),
+    });
+    const bearerResponse = await app.request(`/connections/${connectionId}/query`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${created.secret}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ sql }),
+    });
+
+    expect(sessionResponse.status).toBe(200);
+    expect(bearerResponse.status).toBe(200);
+
+    const sessionBody = (await sessionResponse.json()) as { rowCount: number; rows: unknown[] };
+    const bearerBody = (await bearerResponse.json()) as { rowCount: number; rows: unknown[] };
+    expect(bearerBody.rowCount).toBe(sessionBody.rowCount);
+    expect(bearerBody.rows).toEqual(sessionBody.rows);
+
+    await apiKeyService.revoke(connectionRow!.orgId, created.id);
   });
 
   afterAll(async () => {

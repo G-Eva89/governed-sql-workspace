@@ -1,4 +1,4 @@
-import { count, desc, eq } from 'drizzle-orm';
+import { and, count, desc, eq } from 'drizzle-orm';
 import type { AuditEventPublic, AuditListResult } from '@governed-sql/schemas';
 import type { AppDatabase } from '@governed-sql/db';
 import { auditEvents } from '@governed-sql/db';
@@ -20,6 +20,20 @@ export type RecordQueryInput = {
   durationMs: number;
   errorCode?: string;
   mcpTool?: string;
+  metadata?: Record<string, unknown>;
+};
+
+export type RecordActionInput = {
+  orgId: string;
+  connectionId: string;
+  principal: QueryPrincipal;
+  source: 'web' | 'mcp' | 'api';
+  action: string;
+  status: 'success' | 'error';
+  durationMs: number;
+  errorCode?: string;
+  mcpTool?: string;
+  metadata?: Record<string, unknown>;
 };
 
 export class AuditService {
@@ -40,10 +54,81 @@ export class AuditService {
       errorCode: input.errorCode ?? null,
       source: input.source,
       mcpTool: input.mcpTool ?? null,
+      metadata: input.metadata ?? null,
+    });
+  }
+
+  async recordAction(input: RecordActionInput): Promise<void> {
+    await this.db.insert(auditEvents).values({
+      orgId: input.orgId,
+      connectionId: input.connectionId,
+      principalType: input.principal.type,
+      principalId: input.principal.id,
+      action: input.action,
+      sqlHash: null,
+      sqlPreview: null,
+      rowCount: null,
+      durationMs: input.durationMs,
+      status: input.status,
+      errorCode: input.errorCode ?? null,
+      source: input.source,
+      mcpTool: input.mcpTool ?? null,
+      metadata: input.metadata ?? null,
     });
   }
 
   async list(orgId: string, page: number, limit: number): Promise<AuditListResult> {
+    return this.listFiltered(orgId, page, limit);
+  }
+
+  async listForPrincipal(
+    orgId: string,
+    principalId: string,
+    options: {
+      connectionId?: string;
+      action?: string;
+      page?: number;
+      limit?: number;
+    } = {},
+  ): Promise<AuditListResult> {
+    const page = options.page ?? 1;
+    const limit = options.limit ?? 20;
+    const offset = (page - 1) * limit;
+
+    const filters = [eq(auditEvents.orgId, orgId), eq(auditEvents.principalId, principalId)];
+    if (options.connectionId) {
+      filters.push(eq(auditEvents.connectionId, options.connectionId));
+    }
+    if (options.action) {
+      filters.push(eq(auditEvents.action, options.action));
+    }
+    const whereClause = and(...filters);
+
+    const [totalRow] = await this.db
+      .select({ total: count() })
+      .from(auditEvents)
+      .where(whereClause);
+
+    const rows = await this.db
+      .select()
+      .from(auditEvents)
+      .where(whereClause)
+      .orderBy(desc(auditEvents.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    const total = totalRow?.total ?? 0;
+
+    return {
+      events: rows.map((row) => this.toPublicEvent(row)),
+      page,
+      limit,
+      total,
+      totalPages: total === 0 ? 0 : Math.ceil(total / limit),
+    };
+  }
+
+  private async listFiltered(orgId: string, page: number, limit: number): Promise<AuditListResult> {
     const offset = (page - 1) * limit;
 
     const [totalRow] = await this.db
@@ -85,6 +170,7 @@ export class AuditService {
       errorCode: row.errorCode,
       source: row.source,
       mcpTool: row.mcpTool,
+      metadata: row.metadata ?? null,
       createdAt: row.createdAt.toISOString(),
     };
   }

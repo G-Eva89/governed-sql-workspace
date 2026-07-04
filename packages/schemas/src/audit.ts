@@ -25,6 +25,7 @@ export const auditEventPublicSchema = z.object({
   errorCode: z.string().nullable(),
   source: auditSourceSchema,
   mcpTool: z.string().nullable(),
+  metadata: z.record(z.unknown()).nullable(),
   createdAt: z.string(),
 });
 

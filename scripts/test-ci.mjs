@@ -6,6 +6,21 @@ import { fileURLToPath } from 'node:url';
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const isWindows = process.platform === 'win32';
 
+const DATABASES = [
+  {
+    name: 'app-db',
+    container: 'gsw-app-db',
+    user: 'app',
+    database: 'workspace_app',
+  },
+  {
+    name: 'target-db',
+    container: 'gsw-target-db',
+    user: 'postgres',
+    database: null,
+  },
+];
+
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
     cwd: rootDir,
@@ -23,32 +38,60 @@ function runNodeScript(scriptName, args = []) {
   run(process.execPath, [resolve(rootDir, 'scripts', scriptName), ...args]);
 }
 
-async function waitForPostgres() {
-  const maxAttempts = 60;
+async function waitForDatabase({ name, container, user, database }) {
+  const maxAttempts = 90;
+  const pgIsReadyArgs = database
+    ? ['exec', container, 'pg_isready', '-U', user, '-d', database]
+    : ['exec', container, 'pg_isready', '-U', user];
+
+  console.log(`Waiting for ${name} (${container})...`);
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const result = spawnSync(
-      'docker',
-      ['exec', 'gsw-app-db', 'pg_isready', '-U', 'app', '-d', 'workspace_app'],
-      { cwd: rootDir, stdio: 'pipe', shell: isWindows },
-    );
+    const result = spawnSync('docker', pgIsReadyArgs, {
+      cwd: rootDir,
+      stdio: 'pipe',
+      shell: isWindows,
+    });
 
     if (result.status === 0) {
+      console.log(`${name} is ready.`);
       return;
     }
 
     await sleep(1000);
   }
 
-  console.error('Timed out waiting for app-db to become ready');
+  console.error(`Timed out waiting for ${name} to become ready`);
   process.exit(1);
 }
 
-console.log('Starting Docker services...');
-run('docker', ['compose', 'up', '-d']);
+async function waitForDatabases() {
+  for (const database of DATABASES) {
+    await waitForDatabase(database);
+  }
+}
 
-console.log('Waiting for app-db...');
-await waitForPostgres();
+function startDockerServices() {
+  console.log('Starting Docker services...');
+
+  const waitResult = spawnSync('docker', ['compose', 'up', '-d', '--wait'], {
+    cwd: rootDir,
+    stdio: 'inherit',
+    shell: isWindows,
+  });
+
+  if (waitResult.status === 0) {
+    console.log('Docker services are healthy.');
+    return;
+  }
+
+  console.warn('docker compose --wait failed; falling back to manual health checks.');
+  run('docker', ['compose', 'up', '-d']);
+}
+
+console.log('Starting CI test run...');
+startDockerServices();
+await waitForDatabases();
 
 console.log('Ensuring environment and applying migrations...');
 runNodeScript('ensure-env.mjs');

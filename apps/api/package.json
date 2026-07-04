@@ -7,7 +7,7 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsx watch src/index.ts",
     "test": "vitest run --exclude '**/*.integration.test.ts'",
-    "test:integration": "vitest run src/gateway.integration.test.ts",
+    "test:integration": "vitest run 'src/**/*.integration.test.ts'",
     "lint": "eslint src"
   },
   "dependencies": {

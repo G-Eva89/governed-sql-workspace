@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import type {
+  ApiKeyService,
   AuthService,
   ConnectionService,
   MetadataService,
@@ -11,41 +12,60 @@ import {
   listTablesQuerySchema,
   runQuerySchema,
   updateConnectionSchema,
-} from '@governed-sql/schemas';import { jsonValidator, queryValidator } from '../lib/validation.js';
+} from '@governed-sql/schemas';
+import { jsonValidator, queryValidator } from '../lib/validation.js';
 import { requireAdmin } from '../middleware/require-admin.js';
-import { requireSession } from '../middleware/require-session.js';
-import type { ApiBindings } from '../types.js';
+import { requirePrincipal } from '../middleware/require-principal.js';
+import type { ApiBindings, Principal } from '../types.js';
+
+function getQuerySource(principal: Principal): 'web' | 'api' {
+  return principal.type === 'api_key' ? 'api' : 'web';
+}
 
 export function createConnectionRoutes(
   authService: AuthService,
+  apiKeyService: ApiKeyService,
   connectionService: ConnectionService,
   metadataService: MetadataService,
   queryService: QueryService,
 ) {
   const routes = new Hono<ApiBindings>();
 
-  routes.use('*', requireSession(authService));
+  routes.use('*', requirePrincipal(authService, apiKeyService));
 
   routes.get('/', async (c) => {
-    const session = c.get('session')!;
-    const items = await connectionService.list(session.orgId);
+    const principal = c.get('principal')!;
+    const items = await connectionService.list(principal.orgId);
+    if (principal.type === 'api_key') {
+      return c.json({
+        connections: apiKeyService.filterScopedConnections(principal.scopes, items),
+      });
+    }
     return c.json({ connections: items });
   });
 
   routes.get('/:id/tables', queryValidator(listTablesQuerySchema), async (c) => {
-    const session = c.get('session')!;
+    const principal = c.get('principal')!;
+    const connectionId = c.req.param('id');
+    if (principal.type === 'api_key') {
+      apiKeyService.assertConnectionScope(principal.scopes, connectionId);
+    }
     const { schema } = c.req.valid('query');
-    const tables = await metadataService.listTables(session.orgId, c.req.param('id'), schema);
+    const tables = await metadataService.listTables(principal.orgId, connectionId, schema);
     return c.json({ tables });
   });
 
   routes.get('/:id/tables/:tableName', queryValidator(describeTableQuerySchema), async (c) => {
-    const session = c.get('session')!;
+    const principal = c.get('principal')!;
+    const connectionId = c.req.param('id');
+    if (principal.type === 'api_key') {
+      apiKeyService.assertConnectionScope(principal.scopes, connectionId);
+    }
     const { schema } = c.req.valid('query');
     const tableName = c.req.param('tableName');
     const columns = await metadataService.describeTable(
-      session.orgId,
-      c.req.param('id'),
+      principal.orgId,
+      connectionId,
       tableName,
       schema,
     );
@@ -56,40 +76,52 @@ export function createConnectionRoutes(
   });
 
   routes.get('/:id', async (c) => {
-    const session = c.get('session')!;
-    const connection = await connectionService.get(session.orgId, c.req.param('id'));
+    const principal = c.get('principal')!;
+    const connectionId = c.req.param('id');
+    if (principal.type === 'api_key') {
+      apiKeyService.assertConnectionScope(principal.scopes, connectionId);
+    }
+    const connection = await connectionService.get(principal.orgId, connectionId);
     return c.json(connection);
   });
 
   routes.post('/', requireAdmin(), jsonValidator('json', createConnectionSchema), async (c) => {
-    const session = c.get('session')!;
+    const principal = c.get('principal')!;
     const body = c.req.valid('json');
-    const connection = await connectionService.create(session.orgId, body);
+    const connection = await connectionService.create(principal.orgId, body);
     return c.json(connection, 201);
   });
 
   routes.patch('/:id', requireAdmin(), jsonValidator('json', updateConnectionSchema), async (c) => {
-    const session = c.get('session')!;
+    const principal = c.get('principal')!;
     const body = c.req.valid('json');
-    const connection = await connectionService.update(session.orgId, c.req.param('id'), body);
+    const connection = await connectionService.update(principal.orgId, c.req.param('id'), body);
     return c.json(connection);
   });
 
   routes.post('/:id/test', async (c) => {
-    const session = c.get('session')!;
-    const result = await connectionService.test(session.orgId, c.req.param('id'));
+    const principal = c.get('principal')!;
+    const connectionId = c.req.param('id');
+    if (principal.type === 'api_key') {
+      apiKeyService.assertConnectionScope(principal.scopes, connectionId);
+    }
+    const result = await connectionService.test(principal.orgId, connectionId);
     return c.json(result);
   });
 
   routes.post('/:id/query', jsonValidator('json', runQuerySchema), async (c) => {
-    const session = c.get('session')!;
+    const principal = c.get('principal')!;
+    const connectionId = c.req.param('id');
+    if (principal.type === 'api_key') {
+      apiKeyService.assertConnectionScope(principal.scopes, connectionId);
+    }
     const body = c.req.valid('json');
     const result = await queryService.run({
-      orgId: session.orgId,
-      connectionId: c.req.param('id'),
+      orgId: principal.orgId,
+      connectionId,
       sql: body.sql,
-      principal: { type: 'user', id: session.userId },
-      source: 'web',
+      principal: { type: principal.type, id: principal.id },
+      source: getQuerySource(principal),
     });
     return c.json(result);
   });
