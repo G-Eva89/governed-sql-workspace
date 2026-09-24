@@ -1,13 +1,18 @@
 import {
   apiErrorBodySchema,
   connectionListResponseSchema,
+  connectionPublicSchema,
+  connectionTestResponseSchema,
   loginResponseSchema,
   queryResultSchema,
   type ConnectionPublic,
+  type ConnectionTestResult,
+  type CreateConnectionRequest,
   type LoginRequest,
   type LoginResponse,
   type QueryResult,
   type RunQueryRequest,
+  type UpdateConnectionRequest,
 } from "@governed-sql/schemas";
 import { API_PREFIX } from "./constants";
 
@@ -65,6 +70,44 @@ export async function listConnections(): Promise<ConnectionPublic[]> {
   });
   const data = await parseJsonResponse(response, connectionListResponseSchema);
   return data.connections.filter((connection) => connection.status === "active");
+}
+
+export async function createConnection(
+  body: CreateConnectionRequest,
+): Promise<ConnectionPublic> {
+  const response = await fetch(`${API_PREFIX}/connections`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(body),
+  });
+
+  return parseJsonResponse(response, connectionPublicSchema);
+}
+
+export async function updateConnection(
+  connectionId: string,
+  body: UpdateConnectionRequest,
+): Promise<ConnectionPublic> {
+  const response = await fetch(`${API_PREFIX}/connections/${connectionId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(body),
+  });
+
+  return parseJsonResponse(response, connectionPublicSchema);
+}
+
+export async function testConnection(
+  connectionId: string,
+): Promise<ConnectionTestResult> {
+  const response = await fetch(`${API_PREFIX}/connections/${connectionId}/test`, {
+    method: "POST",
+    credentials: "include",
+  });
+
+  return parseJsonResponse(response, connectionTestResponseSchema);
 }
 
 export async function runQuery(

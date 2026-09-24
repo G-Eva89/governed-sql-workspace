@@ -14,7 +14,7 @@ import { eq } from 'drizzle-orm';
 import type { Hono } from 'hono';
 import { createApp } from '../../api/src/app.js';
 import type { ApiBindings } from '../../api/src/types.js';
-import { createRuntime, type McpRuntime } from '../runtime.js';
+import { createRuntime, type McpRuntime } from './runtime.js';
 import { handleDescribeTable, handleListTables } from './tools/metadata/handlers.js';
 import { handleGetQueryHistory, handleRunQuery } from './tools/query/handlers.js';
 

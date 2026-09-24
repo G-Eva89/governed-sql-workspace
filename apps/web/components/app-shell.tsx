@@ -1,6 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import type { AuthMeResponse } from "@governed-sql/schemas";
 import { logout } from "@/lib/api";
 
@@ -9,8 +10,15 @@ type AppShellProps = {
   children: React.ReactNode;
 };
 
+const NAV_ITEMS = [
+  { href: "/", label: "Query" },
+  { href: "/audit", label: "Audit" },
+  { href: "/connections", label: "Connections" },
+] as const;
+
 export function AppShell({ session, children }: AppShellProps) {
   const router = useRouter();
+  const pathname = usePathname();
 
   async function handleLogout() {
     await logout();
@@ -31,6 +39,26 @@ export function AppShell({ session, children }: AppShellProps) {
               {session.org.name}
             </span>
           </div>
+
+          <nav className="flex items-center gap-1">
+            {NAV_ITEMS.map((item) => {
+              const isActive =
+                item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                    isActive
+                      ? "bg-emerald-50 text-emerald-800"
+                      : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
 
           <div className="flex items-center gap-4">
             <div className="text-right text-xs text-zinc-600">

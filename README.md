@@ -140,7 +140,7 @@ Requires Docker running (tests hit the real app DB and Pagila on `localhost:5434
 
 ---
 
-## API endpoints (Week 1)
+## API endpoints
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
@@ -149,11 +149,27 @@ Requires Docker running (tests hit the real app DB and Pagila on `localhost:5434
 | `POST` | `/auth/login` | — | Email/password → session cookie |
 | `POST` | `/auth/logout` | Session | Clear session |
 | `GET` | `/auth/me` | Session | Current user, org, role |
-| `GET` | `/connections` | Session | List org connections |
-| `GET` | `/connections/:id` | Session | Connection details |
+| `GET` | `/connections` | Session or API key | List org connections |
+| `GET` | `/connections/:id` | Session or API key | Connection details |
 | `POST` | `/connections` | Admin | Register connection (ping + encrypt) |
 | `PATCH` | `/connections/:id` | Admin | Update name / status / password |
-| `POST` | `/connections/:id/test` | Session | `SELECT 1` against target |
+| `POST` | `/connections/:id/test` | Session or API key | `SELECT 1` against target |
+| `GET` | `/connections/:id/tables` | Session or API key | List tables (`?schema=`) |
+| `GET` | `/connections/:id/tables/:tableName` | Session or API key | Column metadata (`?schema=`) |
+| `POST` | `/connections/:id/query` | Session or API key | Run governed SQL |
+| `GET` | `/audit` | Session | Paginated audit log (`?page=&limit=`) |
+| `GET` | `/api-keys` | Admin | List API keys (prefix only) |
+| `POST` | `/api-keys` | Admin | Create API key (secret shown once) |
+| `DELETE` | `/api-keys/:id` | Admin | Revoke API key |
+
+### Web app pages
+
+| Route | Purpose |
+|-------|---------|
+| `/login` | Email/password login |
+| `/` | SQL workspace — pick a connection, run a query, view results |
+| `/audit` | Paginated audit log (who ran what, from where, success or policy violation) |
+| `/connections` | List connections, test connectivity; admins can register new ones and enable/disable existing ones |
 
 Errors are structured JSON:
 

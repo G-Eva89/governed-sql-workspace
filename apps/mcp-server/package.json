@@ -11,7 +11,7 @@
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "test": "vitest run --passWithNoTests --exclude '**/*.integration.test.ts'",
-    "test:integration": "vitest run 'src/**/*.integration.test.ts'",
+    "test:integration": "vitest run src/shared-path.integration.test.ts src/tools/query/handlers.integration.test.ts src/tools/metadata/handlers.integration.test.ts",
     "lint": "eslint src"
   },
   "dependencies": {

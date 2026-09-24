@@ -50,3 +50,5 @@ export const connectionTestResponseSchema = z.object({
   ok: z.literal(true),
   message: z.string(),
 });
+
+export type ConnectionTestResult = z.infer<typeof connectionTestResponseSchema>;

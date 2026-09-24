@@ -5,8 +5,8 @@ import type {
   McpListTablesInput,
   McpListTablesOutput,
 } from '@governed-sql/schemas';
-import type { McpRuntime } from '../runtime.js';
-import { getMcpPrincipal, resolveScopedConnectionId } from '../lib/scoped-connection.js';
+import type { McpRuntime } from '../../runtime.js';
+import { getMcpPrincipal, resolveScopedConnectionId } from '../../lib/scoped-connection.js';
 
 async function recordMetadataAudit(
   runtime: McpRuntime,

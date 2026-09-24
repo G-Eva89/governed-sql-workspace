@@ -87,9 +87,21 @@ importers:
 
   apps/mcp-server:
     dependencies:
+      '@governed-sql/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@governed-sql/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@governed-sql/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
       '@modelcontextprotocol/sdk':
         specifier: ^1.12.1
         version: 1.29.0(zod@3.25.76)
+      zod:
+        specifier: ^3.25.67
+        version: 3.25.76
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -106,6 +118,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@governed-sql/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
       next:
         specifier: 16.3.0-canary.45
         version: 16.3.0-canary.45(@babel/core@7.29.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -2270,6 +2285,7 @@ packages:
   eslint@9.39.4:
     resolution: {integrity: sha512-XoMjdBOwe/esVgEvLmNsD3IRHkm7fbKIUGvrleloJXUZgDHig2IPWNniv+GwjyJXzuNqVjlr5+4yVUZjycJwfQ==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+    deprecated: This version is no longer supported. Please see https://eslint.org/version-support for other options.
     hasBin: true
     peerDependencies:
       jiti: '*'
