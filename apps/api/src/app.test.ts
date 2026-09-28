@@ -1,10 +1,12 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import {
+  AnthropicNlClient,
   ApiKeyService,
   AuditService,
   AuthService,
   ConnectionService,
   MetadataService,
+  NlToSqlService,
   PolicyEngine,
   QueryService,
 } from '@governed-sql/core';
@@ -55,14 +57,16 @@ describe('API', () => {
   const auditService = new AuditService(db);
   const queryService = new QueryService(connectionService, new PolicyEngine(), auditService);
   const apiKeyService = new ApiKeyService(db);
+  const metadataService = new MetadataService(connectionService);
   const app = createApp({
     db,
     authService: new AuthService(db),
     apiKeyService,
     connectionService,
-    metadataService: new MetadataService(connectionService),
+    metadataService,
     queryService,
     auditService,
+    nlToSqlService: new NlToSqlService(metadataService, connectionService, new AnthropicNlClient()),
   });
   const createdConnectionNames: string[] = [];
 

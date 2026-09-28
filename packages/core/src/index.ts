@@ -38,3 +38,10 @@ export {
 } from './metadata/metadata-service.js';
 export { PolicyEngine, type PolicyValidationOptions } from './policy/policy-engine.js';
 export { QueryService, type RunQueryInput } from './query/query-service.js';
+export { AnthropicNlClient, requireAnthropicApiKey } from './nl-to-sql/anthropic-client.js';
+export {
+  NlToSqlService,
+  type ChatTurn,
+  type GenerateSqlInput,
+  type GenerateSqlResult,
+} from './nl-to-sql/nl-to-sql-service.js';

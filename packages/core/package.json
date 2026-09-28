@@ -17,6 +17,7 @@
     "lint": "eslint src"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.1",
     "@governed-sql/db": "workspace:*",
     "@governed-sql/schemas": "workspace:*",
     "bcryptjs": "^3.0.2",

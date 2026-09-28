@@ -12,6 +12,7 @@ type AppShellProps = {
 
 const NAV_ITEMS = [
   { href: "/", label: "Query" },
+  { href: "/chat", label: "Chat" },
   { href: "/audit", label: "Audit" },
   { href: "/connections", label: "Connections" },
 ] as const;

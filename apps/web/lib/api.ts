@@ -3,11 +3,14 @@ import {
   connectionListResponseSchema,
   connectionPublicSchema,
   connectionTestResponseSchema,
+  generateSqlResponseSchema,
   loginResponseSchema,
   queryResultSchema,
   type ConnectionPublic,
   type ConnectionTestResult,
   type CreateConnectionRequest,
+  type GenerateSqlRequest,
+  type GenerateSqlResponse,
   type LoginRequest,
   type LoginResponse,
   type QueryResult,
@@ -122,4 +125,18 @@ export async function runQuery(
   });
 
   return parseJsonResponse(response, queryResultSchema);
+}
+
+export async function generateSql(
+  connectionId: string,
+  body: GenerateSqlRequest,
+): Promise<GenerateSqlResponse> {
+  const response = await fetch(`${API_PREFIX}/chat/${connectionId}/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(body),
+  });
+
+  return parseJsonResponse(response, generateSqlResponseSchema);
 }

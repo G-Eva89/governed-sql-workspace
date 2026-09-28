@@ -1,10 +1,12 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import {
+  AnthropicNlClient,
   ApiKeyService,
   AuditService,
   AuthService,
   ConnectionService,
   MetadataService,
+  NlToSqlService,
   PolicyEngine,
   QueryService,
 } from '@governed-sql/core';
@@ -54,14 +56,16 @@ describe('Governed SQL gateway integration', () => {
   const connectionService = new ConnectionService(db);
   const auditService = new AuditService(db);
   const queryService = new QueryService(connectionService, new PolicyEngine(), auditService);
+  const metadataService = new MetadataService(connectionService);
   const app = createApp({
     db,
     authService: new AuthService(db),
     apiKeyService: new ApiKeyService(db),
     connectionService,
-    metadataService: new MetadataService(connectionService),
+    metadataService,
     queryService,
     auditService,
+    nlToSqlService: new NlToSqlService(metadataService, connectionService, new AnthropicNlClient()),
   });
 
   it('happy path: governed SELECT returns rows from Pagila', async () => {

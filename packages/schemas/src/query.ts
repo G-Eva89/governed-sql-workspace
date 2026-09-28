@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 export const runQuerySchema = z.object({
   sql: z.string().trim().min(1, 'SQL is required'),
+  nlPrompt: z.string().max(2000).optional(),
 });
 
 export type RunQueryRequest = z.infer<typeof runQuerySchema>;

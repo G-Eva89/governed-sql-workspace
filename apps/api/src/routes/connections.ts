@@ -122,6 +122,7 @@ export function createConnectionRoutes(
       sql: body.sql,
       principal: { type: principal.type, id: principal.id },
       source: getQuerySource(principal),
+      metadata: body.nlPrompt ? { nlPrompt: body.nlPrompt } : undefined,
     });
     return c.json(result);
   });

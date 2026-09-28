@@ -4,7 +4,7 @@
 
 A TypeScript monorepo for **governed read-only SQL access** — encrypted connection credentials, session auth, and a shared domain layer that powers both a REST API and an MCP server for IDE agents.
 
-**Current status (Week 4):** Web UI (login + query workspace), Docker infrastructure, Pagila, governed query gateway, MCP stdio server, audit logging, and GitHub Actions CI.
+**Current status (Week 5):** Web UI (login, query workspace, audit log, connections manager, NL-to-SQL chat), Docker infrastructure, Pagila, governed query gateway, MCP stdio server, audit logging, and GitHub Actions CI.
 
 ---
 
@@ -157,6 +157,7 @@ Requires Docker running (tests hit the real app DB and Pagila on `localhost:5434
 | `GET` | `/connections/:id/tables` | Session or API key | List tables (`?schema=`) |
 | `GET` | `/connections/:id/tables/:tableName` | Session or API key | Column metadata (`?schema=`) |
 | `POST` | `/connections/:id/query` | Session or API key | Run governed SQL |
+| `POST` | `/chat/:connectionId/generate` | Session or API key | Generate SQL + explanation from a natural-language question (does not execute) |
 | `GET` | `/audit` | Session | Paginated audit log (`?page=&limit=`) |
 | `GET` | `/api-keys` | Admin | List API keys (prefix only) |
 | `POST` | `/api-keys` | Admin | Create API key (secret shown once) |
@@ -168,6 +169,7 @@ Requires Docker running (tests hit the real app DB and Pagila on `localhost:5434
 |-------|---------|
 | `/login` | Email/password login |
 | `/` | SQL workspace — pick a connection, run a query, view results |
+| `/chat` | Ask a question in plain English, review the generated SQL and explanation, then run it against the governed gateway |
 | `/audit` | Paginated audit log (who ran what, from where, success or policy violation) |
 | `/connections` | List connections, test connectivity; admins can register new ones and enable/disable existing ones |
 
@@ -193,7 +195,7 @@ apps/
   mcp-server/    MCP stdio server for IDE agents (Cursor, Claude Desktop)
   web/           Next.js UI (login, query workspace)
 packages/
-  core/          Domain services (AuthService, ConnectionService)
+  core/          Domain services (AuthService, ConnectionService, QueryService, NlToSqlService)
   db/            Drizzle schema, migrations, seed
   schemas/       Shared Zod types
 scripts/         dev-up, Pagila seed, psql helpers
@@ -244,6 +246,7 @@ Key variables:
 | `ENCRYPTION_KEY` | dev placeholder | Encrypt connection passwords at rest |
 | `SESSION_SECRET` | dev placeholder | Sign session JWT cookies |
 | `PORT` | `3001` | API port |
+| `ANTHROPIC_API_KEY` | — (required for chat) | LLM used by the NL-to-SQL chat feature |
 
 Change secrets before any non-local deployment.
 
@@ -427,6 +430,16 @@ HTTP and MCP return the same structured error codes. Responses are JSON — neve
 
 ---
 
+## NL-to-SQL chat
+
+The `/chat` web page lets a user ask a question in plain English (e.g. "how many films are there per category"). `POST /chat/:connectionId/generate` sends the question, the connection's schema (tables/columns from `MetadataService`), and prior turns in the conversation to Anthropic Claude, which returns a single read-only SQL statement plus a plain-English explanation — **it does not execute anything**.
+
+The user reviews the generated SQL and clicks **Run**, which calls the existing `POST /connections/:id/query` endpoint — the exact same governed path used by the manual query workspace. This means an LLM-generated query is subject to the identical `PolicyEngine` checks (read-only, schema allowlist, row cap, statement timeout) as SQL typed by hand; the LLM can only *suggest*, never bypass the gateway. The originating question is passed through as `nlPrompt` and stored in the audit row's `metadata` field, so `/audit` shows what was asked as well as what ran.
+
+Conversation history is kept client-side only (replayed on each request) — there is no server-side chat persistence in this MVP. Requires `ANTHROPIC_API_KEY` to be set; the feature returns `INTERNAL_ERROR` if it is missing.
+
+---
+
 ## Threat model (MVP)
 
 ### Who can do what
@@ -458,6 +471,7 @@ HTTP and MCP return the same structured error codes. Responses are JSON — neve
 | SQL injection via table names | Parameterized metadata queries; validated table identifiers |
 | MCP bypasses gateway | Single code path through `packages/core` (`QueryService`, `MetadataService`) |
 | Credentials in logs | Encrypted at rest; secrets never returned from API |
+| LLM suggests destructive/invalid SQL | Execution still goes through `QueryService`/`PolicyEngine`; generated SQL is never auto-run without user confirmation |
 
 ### Known limitations (MVP)
 
@@ -465,6 +479,8 @@ HTTP and MCP return the same structured error codes. Responses are JSON — neve
 - Advanced SQL parser bypasses mitigated by DB role, not eliminated
 - No rate limiting per API key yet
 - Org-wide (`*`) keys require explicit `connectionId` on each tool call
+- Chat conversation history is client-side only (not persisted server-side or across devices)
+- No pre-execution validation of LLM-suggested table/column names — hallucinated identifiers fail naturally on execution
 
 ---
 

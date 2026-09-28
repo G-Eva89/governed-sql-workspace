@@ -1,11 +1,13 @@
 import { serve } from '@hono/node-server';
 import {
+  AnthropicNlClient,
   ApiKeyService,
   AuditService,
   AuthService,
   closeAllTargetClients,
   ConnectionService,
   MetadataService,
+  NlToSqlService,
   PolicyEngine,
   QueryService,
 } from '@governed-sql/core';
@@ -21,6 +23,11 @@ const connectionService = new ConnectionService(db);
 const metadataService = new MetadataService(connectionService);
 const auditService = new AuditService(db);
 const queryService = new QueryService(connectionService, new PolicyEngine(), auditService);
+const nlToSqlService = new NlToSqlService(
+  metadataService,
+  connectionService,
+  new AnthropicNlClient(),
+);
 const app = createApp({
   db,
   authService,
@@ -29,6 +36,7 @@ const app = createApp({
   metadataService,
   queryService,
   auditService,
+  nlToSqlService,
 });
 const port = Number(process.env.PORT ?? 3001);
 
